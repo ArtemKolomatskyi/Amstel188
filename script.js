@@ -166,7 +166,20 @@ function updateMonthStatus() {
 // Update selected count display
 function updateSelectedCount() {
     const count = Object.keys(selectedBookings).length;
-    document.getElementById('selectedCount').textContent = `${count} day${count !== 1 ? 's' : ''} selected`;
+    const nameInput = document.getElementById('nameInput');
+    const name = nameInput ? nameInput.value.trim() : '';
+    const userNameDisplay = document.getElementById('userNameDisplay');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (name) {
+        userNameDisplay.textContent = `${name}: `;
+        userNameDisplay.style.display = 'inline';
+    } else {
+        userNameDisplay.textContent = '';
+        userNameDisplay.style.display = 'none';
+    }
+    
+    selectedCount.textContent = `${count} day${count !== 1 ? 's' : ''} selected`;
 }
 
 // Get booking key for a specific date and chair
@@ -246,6 +259,7 @@ function setupEventListeners() {
     if (nameInput) {
         nameInput.addEventListener('input', () => {
             updateMonthStatus();
+            updateSelectedCount();
             selectedBookings = {};
             currentChair = null;
             renderCalendar();

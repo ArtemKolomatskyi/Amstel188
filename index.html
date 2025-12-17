@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amstel 188 Chair Booking</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <!-- Firebase Config (you'll create this file) -->
+    <script src="firebase-config.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Amstel 188 Chair Booking</h1>
+            <div class="name-input-section">
+                <label for="nameInput">Your Name:</label>
+                <input type="text" id="nameInput" placeholder="Enter your name" maxlength="30">
+            </div>
+        </header>
+
+        <div class="calendar-section">
+            <div class="calendar-header">
+                <button class="nav-btn" id="prevMonth">←</button>
+                <h2 id="currentMonthYear"></h2>
+                <button class="nav-btn" id="nextMonth">→</button>
+            </div>
+            
+            <div class="booking-controls">
+                <div class="selected-info-display">
+                    <span id="selectedCount">0 days selected</span>
+                </div>
+                <button class="confirm-btn" id="confirmMonthBtn">Confirm My Bookings</button>
+            </div>
+            
+            <div id="monthStatus" class="month-status"></div>
+
+            <div class="calendar-table-container">
+                <table class="calendar-table">
+                    <thead>
+                        <tr>
+                            <th class="day-column-header"></th>
+                            <th class="chair-header chair-1">Chair 1</th>
+                            <th class="chair-header chair-2">Chair 2</th>
+                            <th class="chair-header chair-3">Chair 3</th>
+                            <th class="chair-header chair-4">Chair 4</th>
+                            <th class="chair-header chair-5">Nails</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calendarBody">
+                        <!-- Calendar rows will be generated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

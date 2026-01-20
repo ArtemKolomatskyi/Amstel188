@@ -667,14 +667,10 @@ function confirmCurrentUserDrafts() {
     }
 
     const actor = currentClientName;
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
     let confirmedCount = 0;
     for (const [key, pending] of Object.entries(pendingBookings)) {
         if (!pending || pending.name !== currentClientName) continue;
-        if (!key.startsWith(monthPrefix)) continue;
         // Move draft to confirmed bookings
         bookings[key] = { name: currentClientName };
         delete pendingBookings[key];

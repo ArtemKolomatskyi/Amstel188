@@ -64,12 +64,14 @@ function loadBookings() {
                 bookings = {};
             }
             renderCalendar();
+            renderAdminLog();
         });
     } else {
         const saved = localStorage.getItem('salonBookings');
         if (saved) {
             bookings = JSON.parse(saved);
             renderCalendar();
+            renderAdminLog();
         }
     }
 }
@@ -614,6 +616,7 @@ function renderCalendar() {
     // Update status after rendering
     setTimeout(() => {
         updateMonthStatus();
+        renderAdminLog();
     }, 100);
 }
 

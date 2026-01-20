@@ -213,7 +213,8 @@ function addLogEntry(action, dateString, chair, actorName, bookingName) {
 function renderAdminLog() {
     const container = document.getElementById('adminLogContainer');
     const list = document.getElementById('adminLog');
-    if (!container || !list) return;
+    const stats = document.getElementById('adminStats');
+    if (!container || !list || !stats) return;
 
     if (!isAdmin) {
         container.style.display = 'none';
@@ -256,7 +257,6 @@ function renderAdminLog() {
         .filter(({ entry }) => entry.date && entry.date.startsWith(monthPrefix));
 
     const summaryHtmlParts = [];
-    summaryHtmlParts.push('<div class="admin-log-summary">');
     summaryHtmlParts.push('<div class="admin-log-summary-block"><strong>Bookings per name (this month):</strong>');
     if (Object.keys(perNameCounts).length === 0) {
         summaryHtmlParts.push('<div>No bookings yet this month.</div>');
@@ -274,12 +274,12 @@ function renderAdminLog() {
         const label = getChairDisplayName(chair);
         summaryHtmlParts.push(`<li>${label}: ${freePerChair[chair]} free slot(s)</li>`);
     }
-    summaryHtmlParts.push('</ul></div></div>');
+    summaryHtmlParts.push('</ul></div>');
 
-    const summaryHtml = summaryHtmlParts.join('');
+    stats.innerHTML = summaryHtmlParts.join('');
 
     if (!entriesForMonth.length) {
-        list.innerHTML = summaryHtml + '<div class="admin-log-entry">No changes recorded yet for this month.</div>';
+        list.innerHTML = '<div class="admin-log-entry">No changes recorded yet for this month.</div>';
         return;
     }
 

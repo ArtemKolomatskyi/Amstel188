@@ -15,13 +15,14 @@
     <div class="container">
         <header>
             <h1>Amstel 188 Chair Booking</h1>
-            <div class="name-input-section">
-                <label for="nameInput">Your Name:</label>
-                <input type="text" id="nameInput" placeholder="Enter your name" maxlength="30">
-            </div>
         </header>
 
         <div class="calendar-section">
+            <!-- Public user list: everyone can pick their name -->
+            <div id="userManager" class="user-manager">
+                <div id="userList" class="user-list"></div>
+            </div>
+
             <div class="calendar-header">
                 <button class="nav-btn" id="prevMonth">←</button>
                 <h2 id="currentMonthYear"></h2>
@@ -31,9 +32,8 @@
             <div class="booking-controls">
                 <div class="selected-info-display">
                     <span id="userNameDisplay"></span>
-                    <span id="selectedCount">0 days selected</span>
+                    <span id="selectedCount">0 bookings this month</span>
                 </div>
-                <button class="confirm-btn" id="confirmMonthBtn">Confirm My Bookings</button>
             </div>
             
             <div id="monthStatus" class="month-status"></div>
@@ -54,6 +54,28 @@
                         <!-- Calendar rows will be generated here -->
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Admin area at the bottom -->
+        <div class="admin-bottom-area">
+            <div class="admin-panel">
+                <div class="admin-panel-row">
+                    <label for="adminPassword">Admin password:</label>
+                    <input type="password" id="adminPassword" placeholder="For admin only" maxlength="30">
+                </div>
+                <div id="adminUserControls" class="admin-user-controls" style="display: none;">
+                    <div class="user-manager-header">
+                        <input type="text" id="newUserInput" placeholder="Add client name">
+                        <button id="addUserBtn" class="user-add-btn">Add</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin change log (visible only in admin mode) -->
+            <div id="adminLogContainer" class="admin-log-container" style="display: none;">
+                <h3>Change Log (Admin Only)</h3>
+                <div id="adminLog" class="admin-log"></div>
             </div>
         </div>
     </div>

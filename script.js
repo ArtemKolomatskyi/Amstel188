@@ -1,16 +1,20 @@
 // Booking data structure: { "dateString-chair": { name: string, confirmed: boolean } }
 // Confirmed bookings per person: { "name": { "dateString-chair": true } }
 let bookings = {};
-let confirmedBookings = {}; // Per person confirmed bookings
-let selectedBookings = {}; // Temporary selections before confirmation
+let confirmedBookings = {}; // Legacy object (no longer used for locking)
+let selectedBookings = {}; // Legacy (no longer drives saving)
 let currentDate = new Date();
 let database = null;
 let isFirebaseReady = false;
-let currentChair = null; // Currently selected chair for multi-select
+let currentChair = null; // Legacy
+let changeLog = []; // List of all add/remove actions
+let users = []; // Managed client names (admin only)
+let isAdmin = false; // True when correct password entered
+let currentClientName = null; // Selected client for whom admin creates bookings
 
 // Day of week abbreviations
 const dayAbbreviations = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const ADMIN_NAME = 'Amstel188';
+const ADMIN_PASSWORD = 'Amstel 188';
 
 // Initialize Firebase
 function initFirebase() {
@@ -22,16 +26,22 @@ function initFirebase() {
             console.log('Firebase initialized successfully');
             loadBookings();
             loadConfirmedBookings();
+            loadChangeLog();
+            loadUsers();
         } else {
             console.warn('Firebase not configured. Using localStorage as fallback.');
             loadBookings();
             loadConfirmedBookings();
+            loadChangeLog();
+            loadUsers();
         }
     } catch (error) {
         console.error('Firebase initialization error:', error);
         console.warn('Falling back to localStorage');
         loadBookings();
         loadConfirmedBookings();
+        loadChangeLog();
+        loadUsers();
     }
 }
 
@@ -85,6 +95,62 @@ function loadConfirmedBookings() {
     }
 }
 
+// Load change log
+function loadChangeLog() {
+    if (isFirebaseReady && database) {
+        const logRef = database.ref('changeLog');
+        logRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (Array.isArray(data)) {
+                changeLog = data;
+            } else {
+                changeLog = [];
+            }
+            renderAdminLog();
+        });
+    } else {
+        const saved = localStorage.getItem('bookingChangeLog');
+        if (saved) {
+            try {
+                changeLog = JSON.parse(saved);
+            } catch {
+                changeLog = [];
+            }
+        }
+        renderAdminLog();
+    }
+}
+
+// Load users list
+function loadUsers() {
+    if (isFirebaseReady && database) {
+        const usersRef = database.ref('users');
+        usersRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (Array.isArray(data)) {
+                users = data;
+            } else if (data && typeof data === 'object') {
+                users = Object.values(data);
+            } else {
+                users = [];
+            }
+            renderUserManager();
+            updateSelectedCount();
+        });
+    } else {
+        const saved = localStorage.getItem('bookingUsers');
+        if (saved) {
+            try {
+                users = JSON.parse(saved);
+            } catch {
+                users = [];
+            }
+        }
+        renderUserManager();
+        updateSelectedCount();
+    }
+}
+
 // Save confirmed bookings
 function saveConfirmedBookings() {
     if (isFirebaseReady && database) {
@@ -98,88 +164,287 @@ function saveConfirmedBookings() {
     }
 }
 
-// Check if booking is confirmed for a person
-function isBookingConfirmed(dateString, chair, name) {
-    if (!confirmedBookings[name]) {
-        return false;
+// Save change log
+function saveChangeLog() {
+    if (isFirebaseReady && database) {
+        database.ref('changeLog').set(changeLog)
+            .catch(() => {
+                localStorage.setItem('bookingChangeLog', JSON.stringify(changeLog));
+            });
+    } else {
+        localStorage.setItem('bookingChangeLog', JSON.stringify(changeLog));
     }
-    const bookingKey = getBookingKey(dateString, chair);
-    return confirmedBookings[name][bookingKey] === true;
 }
 
-// Check if user has any confirmed bookings this month
-function hasConfirmedBookingsThisMonth(name) {
-    if (!confirmedBookings[name]) {
-        return false;
+// Save users list
+function saveUsers() {
+    if (isFirebaseReady && database) {
+        database.ref('users').set(users)
+            .catch(() => {
+                localStorage.setItem('bookingUsers', JSON.stringify(users));
+            });
+    } else {
+        localStorage.setItem('bookingUsers', JSON.stringify(users));
     }
+}
+
+// Add entry to change log
+function addLogEntry(action, dateString, chair, actorName, bookingName) {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        action, // 'add' | 'remove'
+        date: dateString,
+        chair,
+        actor: actorName,
+        name: bookingName
+    };
+    changeLog.push(entry);
+    // Keep log from growing forever
+    if (changeLog.length > 500) {
+        changeLog = changeLog.slice(changeLog.length - 500);
+    }
+    saveChangeLog();
+    renderAdminLog();
+}
+
+// Render admin log (only visible in admin mode)
+function renderAdminLog() {
+    const container = document.getElementById('adminLogContainer');
+    const list = document.getElementById('adminLog');
+    if (!container || !list) return;
+
+    if (!isAdmin) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-    
-    for (const key in confirmedBookings[name]) {
-        if (key.startsWith(monthPrefix)) {
-            return true;
+
+    // --- Month summary (based on bookings, not just log) ---
+    const perNameCounts = {};
+    const freePerChair = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    // Count bookings per name for this month
+    for (const [key, booking] of Object.entries(bookings)) {
+        if (!booking || !key.startsWith(monthPrefix)) continue;
+        const name = booking.name || 'Unknown';
+        perNameCounts[name] = (perNameCounts[name] || 0) + 1;
+    }
+
+    // Count free slots per chair for this month
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        for (let chair = 1; chair <= 5; chair++) {
+            const key = getBookingKey(dateString, chair);
+            if (!bookings[key]) {
+                freePerChair[chair] = (freePerChair[chair] || 0) + 1;
+            }
         }
     }
-    return false;
+
+    // Filter log entries to current month only
+    const entriesForMonth = changeLog
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => entry.date && entry.date.startsWith(monthPrefix));
+
+    const summaryHtmlParts = [];
+    summaryHtmlParts.push('<div class="admin-log-summary">');
+    summaryHtmlParts.push('<div class="admin-log-summary-block"><strong>Bookings per name (this month):</strong>');
+    if (Object.keys(perNameCounts).length === 0) {
+        summaryHtmlParts.push('<div>No bookings yet this month.</div>');
+    } else {
+        summaryHtmlParts.push('<ul>');
+        Object.keys(perNameCounts).sort().forEach((name) => {
+            summaryHtmlParts.push(`<li>${name}: ${perNameCounts[name]} day(s)</li>`);
+        });
+        summaryHtmlParts.push('</ul>');
+    }
+    summaryHtmlParts.push('</div>');
+
+    summaryHtmlParts.push('<div class="admin-log-summary-block"><strong>Free slots per chair (this month):</strong><ul>');
+    for (let chair = 1; chair <= 5; chair++) {
+        const label = getChairDisplayName(chair);
+        summaryHtmlParts.push(`<li>${label}: ${freePerChair[chair]} free slot(s)</li>`);
+    }
+    summaryHtmlParts.push('</ul></div></div>');
+
+    const summaryHtml = summaryHtmlParts.join('');
+
+    if (!entriesForMonth.length) {
+        list.innerHTML = summaryHtml + '<div class="admin-log-entry">No changes recorded yet for this month.</div>';
+        return;
+    }
+
+    const rows = entriesForMonth
+        .slice()
+        .reverse()
+        .map(({ entry, index }) => {
+            const time = new Date(entry.timestamp).toLocaleString();
+            const chairLabel = getChairDisplayName(entry.chair);
+            const actionClass = entry.action === 'add' ? 'log-action-add' : 'log-action-remove';
+            const actionText = entry.action === 'add' ? 'added' : 'removed';
+            return `
+                <div class="admin-log-entry" data-log-index="${index}">
+                    <span class="log-time">${time}</span>
+                    <span class="${actionClass}">${actionText}</span>
+                    <span>${entry.name}</span>
+                    <span>on ${entry.date} (${chairLabel})</span>
+                    <span>by ${entry.actor}</span>
+                    <button class="log-delete-btn" title="Remove this log entry">×</button>
+                </div>
+            `;
+        })
+        .join('');
+
+    list.innerHTML = rows;
+
+    // Attach delete handlers
+    Array.from(list.querySelectorAll('.log-delete-btn')).forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const parent = btn.closest('.admin-log-entry');
+            if (!parent) return;
+            const index = parseInt(parent.getAttribute('data-log-index'), 10);
+            if (Number.isNaN(index)) return;
+
+            if (!confirm('Remove this log entry?')) {
+                return;
+            }
+
+            changeLog.splice(index, 1);
+            saveChangeLog();
+            renderAdminLog();
+        });
+    });
+}
+
+// Render user manager (chips are always visible; adding names is admin-only)
+function renderUserManager() {
+    const list = document.getElementById('userList');
+    if (!list) return;
+
+    if (!users || users.length === 0) {
+        list.innerHTML = '<span style="font-size:0.85rem;color:#777;">No names yet. Ask admin to add one at the bottom.</span>';
+        return;
+    }
+
+    list.innerHTML = users.map((name) => {
+        const selectedClass = currentClientName === name ? 'user-chip selected' : 'user-chip';
+        return `<span class="${selectedClass}" data-user="${name}">${name}</span>`;
+    }).join('');
+
+    // Attach click handlers
+    Array.from(list.querySelectorAll('.user-chip')).forEach((chip) => {
+        chip.addEventListener('click', () => {
+            const name = chip.getAttribute('data-user');
+
+            // If admin is logged in, allow optional removal of a name
+            if (isAdmin) {
+                const remove = confirm(`Do you want to remove the name "${name}"?\nPress OK to remove, or Cancel to just select this name.`);
+                if (remove) {
+                    // Remove name from list
+                    users = users.filter((n) => n !== name);
+                    // If we were showing bookings for this name, clear selection
+                    if (currentClientName === name) {
+                        currentClientName = null;
+                    }
+                    saveUsers();
+                    renderUserManager();
+                    updateSelectedCount();
+                    updateMonthStatus();
+                    return;
+                }
+            }
+
+            // Normal behaviour: select this name for booking
+            currentClientName = name;
+            updateSelectedCount();
+            updateMonthStatus();
+            renderUserManager();
+        });
+    });
 }
 
 // Update month status display
 function updateMonthStatus() {
     const statusDiv = document.getElementById('monthStatus');
     const confirmBtn = document.getElementById('confirmMonthBtn');
-    const nameInput = document.getElementById('nameInput');
-    const name = nameInput ? nameInput.value.trim() : '';
+    const adminPasswordInput = document.getElementById('adminPassword');
+    const adminUserControls = document.getElementById('adminUserControls');
+    const password = adminPasswordInput ? adminPasswordInput.value.trim() : '';
     
-    if (!name) {
+    // Determine admin mode based on password
+    isAdmin = password === ADMIN_PASSWORD;
+
+    // For normal users, keep header quiet – only show selected name counts
+    if (!isAdmin) {
         statusDiv.className = 'month-status';
         statusDiv.textContent = '';
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Enter your name to confirm';
-        updateSelectedCount();
-        return;
-    }
-    
-    if (name === ADMIN_NAME) {
-        statusDiv.className = 'month-status';
-        statusDiv.textContent = 'Admin mode: You can only remove bookings, not create them.';
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Admin Mode';
-        updateSelectedCount();
-        return;
-    }
-    
-    if (hasConfirmedBookingsThisMonth(name)) {
-        statusDiv.className = 'month-status confirmed';
-        statusDiv.textContent = `✓ Your bookings for this month are confirmed and locked. Only admin can make changes.`;
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Your Bookings Confirmed';
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '';
+        }
+        if (adminUserControls) {
+            adminUserControls.style.display = 'none';
+        }
     } else {
-        statusDiv.className = 'month-status';
-        statusDiv.textContent = '';
-        confirmBtn.disabled = Object.keys(selectedBookings).length === 0;
-        confirmBtn.textContent = 'Confirm My Bookings';
+        // Admin mode: subtle hint only
+        if (!currentClientName) {
+            statusDiv.className = 'month-status';
+            statusDiv.textContent = 'Admin: select a name chip to manage bookings.';
+        } else {
+            statusDiv.className = 'month-status confirmed';
+            statusDiv.textContent = `Admin: managing bookings for ${currentClientName}.`;
+        }
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '';
+        }
+        if (adminUserControls) {
+            adminUserControls.style.display = 'block';
+        }
     }
     updateSelectedCount();
+    renderAdminLog();
+    renderUserManager();
 }
 
 // Update selected count display
 function updateSelectedCount() {
-    const count = Object.keys(selectedBookings).length;
-    const nameInput = document.getElementById('nameInput');
-    const name = nameInput ? nameInput.value.trim() : '';
     const userNameDisplay = document.getElementById('userNameDisplay');
     const selectedCount = document.getElementById('selectedCount');
     
-    if (name) {
-        userNameDisplay.textContent = `${name}: `;
-        userNameDisplay.style.display = 'inline';
-    } else {
-        userNameDisplay.textContent = '';
-        userNameDisplay.style.display = 'none';
+    if (!currentClientName) {
+        if (userNameDisplay) {
+            userNameDisplay.textContent = '';
+            userNameDisplay.style.display = 'none';
+        }
+        selectedCount.textContent = 'No client selected';
+        return;
     }
-    
-    selectedCount.textContent = `${count} day${count !== 1 ? 's' : ''} selected`;
+
+    userNameDisplay.textContent = `${currentClientName}: `;
+    userNameDisplay.style.display = 'inline';
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+    let count = 0;
+    for (const [key, booking] of Object.entries(bookings)) {
+        if (!booking || booking.name !== currentClientName) continue;
+        if (key.startsWith(monthPrefix)) {
+            count++;
+        }
+    }
+
+    selectedCount.textContent = `${count} booking${count !== 1 ? 's' : ''} this month`;
 }
 
 // Get booking key for a specific date and chair
@@ -249,82 +514,45 @@ function setupEventListeners() {
         renderCalendar();
     });
     
-    // Confirm month button
-    document.getElementById('confirmMonthBtn').addEventListener('click', () => {
-        confirmBookings();
-    });
-    
-    // Update status when name changes
-    const nameInput = document.getElementById('nameInput');
-    if (nameInput) {
-        nameInput.addEventListener('input', () => {
+    // Update status when admin password changes
+    const adminPasswordInput = document.getElementById('adminPassword');
+    if (adminPasswordInput) {
+        adminPasswordInput.addEventListener('input', () => {
             updateMonthStatus();
             updateSelectedCount();
             selectedBookings = {};
-            currentChair = null;
             renderCalendar();
+        });
+    }
+
+    // Add user button
+    const addUserBtn = document.getElementById('addUserBtn');
+    const newUserInput = document.getElementById('newUserInput');
+    if (addUserBtn && newUserInput) {
+        addUserBtn.addEventListener('click', () => {
+            if (!isAdmin) {
+                alert('Enter the admin password at the bottom before adding names.');
+                return;
+            }
+            const name = newUserInput.value.trim();
+            if (!name) return;
+            if (users.includes(name)) {
+                alert('This client name already exists.');
+                return;
+            }
+            users.push(name);
+            saveUsers();
+            newUserInput.value = '';
+            currentClientName = name;
+            renderUserManager();
+            updateSelectedCount();
+            updateMonthStatus();
         });
     }
 }
 
-// Confirm bookings for current user
-function confirmBookings() {
-    const nameInput = document.getElementById('nameInput');
-    const name = nameInput.value.trim();
-    
-    if (!name) {
-        alert('Please enter your name first!');
-        return;
-    }
-    
-    if (name === ADMIN_NAME) {
-        alert('Admin cannot create bookings. You can only remove existing bookings.');
-        return;
-    }
-    
-    if (Object.keys(selectedBookings).length === 0) {
-        alert('Please select at least one day to book!');
-        return;
-    }
-    
-    if (!confirm(`Confirm ${Object.keys(selectedBookings).length} booking(s)? You won't be able to change them after confirmation.`)) {
-        return;
-    }
-    
-    // Check for conflicts
-    const conflicts = [];
-    for (const [key, booking] of Object.entries(selectedBookings)) {
-        const existing = bookings[key];
-        if (existing && existing.name !== name) {
-            conflicts.push(key);
-        }
-    }
-    
-    if (conflicts.length > 0) {
-        alert('Some days are already booked by others. Please select different days.');
-        return;
-    }
-    
-    // Initialize confirmed bookings for this person if needed
-    if (!confirmedBookings[name]) {
-        confirmedBookings[name] = {};
-    }
-    
-    // Save all selected bookings and mark as confirmed
-    for (const [key, booking] of Object.entries(selectedBookings)) {
-        bookings[key] = { name: booking.name, confirmed: true };
-        confirmedBookings[name][key] = true;
-    }
-    
-    // Clear selections
-    selectedBookings = {};
-    currentChair = null;
-    
-    saveBookings();
-    saveConfirmedBookings();
-    renderCalendar();
-    updateMonthStatus();
-}
+// Legacy confirmBookings function no longer used (confirmation step removed)
+function confirmBookings() {}
 
 // Render the calendar
 function renderCalendar() {
@@ -396,12 +624,9 @@ function createChairCell(year, month, day, chair) {
     
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const booking = getBooking(dateString, chair);
-    const bookingKey = getBookingKey(dateString, chair);
-    const isSelected = selectedBookings[bookingKey] !== undefined;
-    const nameInput = document.getElementById('nameInput');
-    const currentName = nameInput ? nameInput.value.trim() : '';
-    const isConfirmed = currentName && isBookingConfirmed(dateString, chair, currentName);
     
+    const bookingKey = getBookingKey(dateString, chair);
+
     // If this day is booked for this chair, show booking name
     if (booking) {
         cell.classList.add('booked', `chair-${chair}-bg`);
@@ -411,104 +636,53 @@ function createChairCell(year, month, day, chair) {
         cell.appendChild(nameSpan);
     }
     
-    // Show selection state
-    if (isSelected) {
-        cell.classList.add('selected');
-    }
-    
     // Add click handler
     cell.addEventListener('click', () => {
-        if (isConfirmed && currentName !== ADMIN_NAME) {
-            // Booking is confirmed - only admin can modify
-            handleConfirmedCellClick(dateString, cell, booking, chair);
-        } else {
-            // Booking not confirmed or admin - allow selection/removal
-            handleCellClick(dateString, cell, booking, chair);
-        }
+        handleCellClick(dateString, cell, booking, chair);
     });
     
     return cell;
 }
 
-// Handle cell click (for unconfirmed bookings)
+// Handle cell click (for bookings)
 function handleCellClick(dateString, cell, existingBooking, chair) {
-    const nameInput = document.getElementById('nameInput');
-    const name = nameInput.value.trim();
-    
-    if (!name) {
-        alert('Please enter your name first!');
+    // A name must be selected in the gray block
+    if (!currentClientName) {
+        alert('Select a name in the gray block to add or remove bookings.');
         return;
     }
-    
-    // Admin cannot book, only remove
-    if (name === ADMIN_NAME) {
-        if (existingBooking) {
-            if (!confirm(`Remove booking by ${existingBooking.name} on ${getChairDisplayName(chair)}?`)) {
-                return;
-            }
-            const bookingKey = getBookingKey(dateString, chair);
-            delete bookings[bookingKey];
-            // Remove from confirmed bookings if it was confirmed
-            if (existingBooking.name && confirmedBookings[existingBooking.name]) {
-                delete confirmedBookings[existingBooking.name][bookingKey];
-            }
-            saveBookings();
-            saveConfirmedBookings();
-            renderCalendar();
-        }
-        return;
-    }
-    
-    // Check if user's bookings are confirmed
-    if (isBookingConfirmed(dateString, chair, name)) {
-        alert('This booking is confirmed and locked. Only admin can remove it.');
-        return;
-    }
-    
+
+    const actor = currentClientName; // Who is acting (for the log)
     const bookingKey = getBookingKey(dateString, chair);
-    const isSelected = selectedBookings[bookingKey] !== undefined;
-    
-    // If already booked by someone else, can't select
-    if (bookings[bookingKey]) {
-        if (bookings[bookingKey].name !== name) {
-            alert(`${getChairDisplayName(chair)} is already booked by ${bookings[bookingKey].name}.`);
+
+    // If there is already a booking on this slot
+    if (existingBooking) {
+        // Only the same name can remove or change its own days
+        if (existingBooking.name !== currentClientName) {
+            alert(`This slot already belongs to ${existingBooking.name}.`);
             return;
         }
-        // If it's their own booking but not confirmed, they can deselect it
-        if (bookings[bookingKey].name === name && !isBookingConfirmed(dateString, chair, name)) {
-            // Allow removing their own unconfirmed booking
-            delete bookings[bookingKey];
-            saveBookings();
-            renderCalendar();
+
+        // Toggle off this user's own booking
+        if (!confirm(`Remove booking for ${existingBooking.name} on ${getChairDisplayName(chair)}?`)) {
             return;
         }
-    }
-    
-    // Set current chair if not set
-    if (!currentChair) {
-        currentChair = chair;
-    }
-    
-    // Only allow selecting same chair
-    if (currentChair !== chair) {
-        alert(`Please select days for ${getChairDisplayName(currentChair)} only. Clear selections to choose a different chair.`);
+        delete bookings[bookingKey];
+        saveBookings();
+        addLogEntry('remove', dateString, chair, actor, existingBooking.name);
+        renderCalendar();
+        updateSelectedCount();
+        updateMonthStatus();
         return;
     }
-    
-    // Toggle selection
-    if (isSelected) {
-        // Deselect
-        delete selectedBookings[bookingKey];
-        cell.classList.remove('selected');
-    } else {
-        // Select
-        selectedBookings[bookingKey] = { name: name };
-        cell.classList.add('selected');
-    }
-    
+
+    // Empty slot: create new booking for the selected name
+    bookings[bookingKey] = { name: currentClientName };
+    saveBookings();
+    addLogEntry('add', dateString, chair, actor, currentClientName);
+    renderCalendar();
     updateSelectedCount();
     updateMonthStatus();
-    renderCalendar();
 }
 
 // Handle cell click for confirmed bookings (admin only)

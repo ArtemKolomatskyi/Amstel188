@@ -34,36 +34,67 @@ h1 {
     margin-bottom: 20px;
 }
 
-.name-input-section {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-}
-
-.name-input-section label {
-    font-weight: 600;
-    color: #555;
-    font-size: 1.1em;
-}
-
-#nameInput {
-    padding: 12px 20px;
-    border: 2px solid #ddd;
-    border-radius: 8px;
-    font-size: 16px;
-    transition: border-color 0.3s;
-    min-width: 250px;
-}
-
-#nameInput:focus {
-    outline: none;
-    border-color: #667eea;
-}
-
 .calendar-section {
     margin-top: 30px;
     position: relative;
+}
+
+/* Admin user manager */
+.user-manager {
+    margin-top: 15px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    background: #f4f4f4;
+    border-radius: 10px;
+}
+
+.user-manager-header {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+#newUserInput {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 0.9rem;
+}
+
+.user-add-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    background: #667eea;
+    color: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.user-add-btn:hover {
+    background: #5568d3;
+}
+
+.user-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.user-chip {
+    padding: 4px 10px;
+    background: #e0e0e0;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border: 1px solid #d0d0d0;
+}
+
+.user-chip.selected {
+    background: #667eea;
+    color: #fff;
+    border-color: #5568d3;
 }
 
 .calendar-header {
@@ -269,33 +300,14 @@ h1 {
 
 .booking-controls {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
-    margin-bottom: 15px;
-    padding: 15px;
-    background: #f8f9fa;
-    border-radius: 8px;
-    flex-wrap: wrap;
-    gap: 10px;
-    position: sticky;
-    top: 70px; /* Below calendar header */
-    left: 0;
-    right: 0;
-    z-index: 20;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    box-sizing: border-box;
-    min-height: 60px;
+    margin-bottom: 10px;
 }
 
 .selected-info-display {
-    font-weight: 600;
-    color: #667eea;
-    font-size: 1em;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-wrap: wrap;
+    font-size: 0.95rem;
+    color: #555;
 }
 
 #userNameDisplay {
@@ -352,6 +364,121 @@ h1 {
     background: #f8d7da;
     color: #721c24;
     border: 2px solid #f5c6cb;
+}
+
+/* Admin change log */
+.admin-log-container {
+    margin-top: 25px;
+    padding-top: 15px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.admin-log-container h3 {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    color: #444;
+}
+
+.admin-log {
+    max-height: 220px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+}
+
+.admin-log-summary {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.admin-log-summary-block {
+    margin-bottom: 6px;
+}
+
+.admin-log-summary-block ul {
+    padding-left: 18px;
+    margin: 4px 0;
+}
+
+.admin-log-entry {
+    padding: 6px 0;
+    border-bottom: 1px solid #e6e6e6;
+}
+
+.admin-log-entry:last-child {
+    border-bottom: none;
+}
+
+.admin-log-entry span {
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.admin-log-entry .log-time {
+    color: #777;
+}
+
+.admin-log-entry .log-action-add {
+    color: #2e7d32;
+    font-weight: 600;
+}
+
+.admin-log-entry .log-action-remove {
+    color: #c62828;
+    font-weight: 600;
+}
+
+.admin-log-entry .log-delete-btn {
+    border: none;
+    background: transparent;
+    color: #999;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 4px;
+}
+
+.admin-log-entry .log-delete-btn:hover {
+    color: #c62828;
+}
+
+.admin-bottom-area {
+    margin-top: 20px;
+}
+
+.admin-panel {
+    margin-bottom: 15px;
+    padding: 10px 12px;
+    background: #fafafa;
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+}
+
+.admin-panel-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.admin-panel-row label {
+    font-size: 0.9rem;
+    color: #555;
+}
+
+#adminPassword {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 0.9rem;
+}
+
+.admin-user-controls {
+    margin-top: 5px;
 }
 
 .chair-cell.selected {

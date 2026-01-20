@@ -305,7 +305,7 @@ h1 {
 
 .booking-controls {
     display: flex;
-    justify-content: flex-start;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: 10px;
 }
@@ -313,6 +313,7 @@ h1 {
 .selected-info-display {
     font-size: 0.95rem;
     color: #555;
+    flex: 1;
 }
 
 #userNameDisplay {

@@ -526,15 +526,27 @@ function updateSelectedCount() {
     const month = currentDate.getMonth();
     const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-    let count = 0;
+    let confirmedCount = 0;
     for (const [key, booking] of Object.entries(bookings)) {
         if (!booking || booking.name !== currentClientName) continue;
         if (key.startsWith(monthPrefix)) {
-            count++;
+            confirmedCount++;
         }
     }
 
-    selectedCount.textContent = `${count} booking${count !== 1 ? 's' : ''} this month`;
+    let draftCount = 0;
+    for (const [key, pending] of Object.entries(pendingBookings)) {
+        if (!pending || pending.name !== currentClientName) continue;
+        if (key.startsWith(monthPrefix)) {
+            draftCount++;
+        }
+    }
+
+    if (draftCount > 0) {
+        selectedCount.textContent = `${confirmedCount} confirmed, ${draftCount} draft day${draftCount !== 1 ? 's' : ''} this month`;
+    } else {
+        selectedCount.textContent = `${confirmedCount} booking${confirmedCount !== 1 ? 's' : ''} this month`;
+    }
 }
 
 // Get booking key for a specific date and chair

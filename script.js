@@ -11,6 +11,7 @@ let changeLog = []; // List of all add/remove actions
 let users = []; // Managed client names (admin only)
 let isAdmin = false; // True when correct password entered
 let currentClientName = null; // Selected client for whom admin creates bookings
+let pendingBookings = {}; // Draft (unconfirmed) bookings: { key: { name, createdAt } }
 
 // Day of week abbreviations
 const dayAbbreviations = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -28,12 +29,14 @@ function initFirebase() {
             loadConfirmedBookings();
             loadChangeLog();
             loadUsers();
+            loadPendingBookings();
         } else {
             console.warn('Firebase not configured. Using localStorage as fallback.');
             loadBookings();
             loadConfirmedBookings();
             loadChangeLog();
             loadUsers();
+            loadPendingBookings();
         }
     } catch (error) {
         console.error('Firebase initialization error:', error);
@@ -42,6 +45,7 @@ function initFirebase() {
         loadConfirmedBookings();
         loadChangeLog();
         loadUsers();
+        loadPendingBookings();
     }
 }
 
@@ -123,6 +127,61 @@ function loadChangeLog() {
     }
 }
 
+// Load pending (draft) bookings
+function loadPendingBookings() {
+    if (isFirebaseReady && database) {
+        const pendingRef = database.ref('pendingBookings');
+        pendingRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && typeof data === 'object') {
+                pendingBookings = data;
+            } else {
+                pendingBookings = {};
+            }
+            cleanupExpiredDrafts(false);
+            renderCalendar();
+            renderAdminLog();
+        });
+    } else {
+        const saved = localStorage.getItem('pendingBookings');
+        if (saved) {
+            try {
+                pendingBookings = JSON.parse(saved);
+            } catch {
+                pendingBookings = {};
+            }
+        }
+        cleanupExpiredDrafts(false);
+        renderCalendar();
+        renderAdminLog();
+    }
+}
+
+// Remove expired draft bookings (older than 5 minutes)
+function cleanupExpiredDrafts(saveAfter = true) {
+    const now = Date.now();
+    const maxAgeMs = 5 * 60 * 1000;
+    let changed = false;
+
+    for (const [key, pending] of Object.entries(pendingBookings)) {
+        if (!pending || !pending.createdAt) continue;
+        const created = Date.parse(pending.createdAt);
+        if (Number.isNaN(created)) continue;
+        if (now - created > maxAgeMs) {
+            // Draft expired
+            const [dateString, chairStr] = key.split('-');
+            const chair = parseInt(chairStr, 10) || 1;
+            addLogEntry('expire_draft', dateString, chair, pending.name, pending.name);
+            delete pendingBookings[key];
+            changed = true;
+        }
+    }
+
+    if (changed && saveAfter) {
+        savePendingBookings();
+    }
+}
+
 // Load users list
 function loadUsers() {
     if (isFirebaseReady && database) {
@@ -147,6 +206,9 @@ function loadUsers() {
             } catch {
                 users = [];
             }
+        }
+        if (!Array.isArray(users)) {
+            users = [];
         }
         renderUserManager();
         updateSelectedCount();
@@ -187,6 +249,18 @@ function saveUsers() {
             });
     } else {
         localStorage.setItem('bookingUsers', JSON.stringify(users));
+    }
+}
+
+// Save pending (draft) bookings
+function savePendingBookings() {
+    if (isFirebaseReady && database) {
+        database.ref('pendingBookings').set(pendingBookings)
+            .catch(() => {
+                localStorage.setItem('pendingBookings', JSON.stringify(pendingBookings));
+            });
+    } else {
+        localStorage.setItem('pendingBookings', JSON.stringify(pendingBookings));
     }
 }
 
@@ -336,9 +410,14 @@ function renderUserManager() {
         return;
     }
 
-    list.innerHTML = users.map((name) => {
-        const selectedClass = currentClientName === name ? 'user-chip selected' : 'user-chip';
-        return `<span class="${selectedClass}" data-user="${name}">${name}</span>`;
+    list.innerHTML = users.map((u) => {
+        const name = typeof u === 'string' ? u : u.name;
+        const isSelected = currentClientName === name;
+        const classes = ['user-chip'];
+        if (isSelected) {
+            classes.push('selected');
+        }
+        return `<span class="${classes.join(' ')}" data-user="${name}">${name}</span>`;
     }).join('');
 
     // Attach click handlers
@@ -351,7 +430,7 @@ function renderUserManager() {
                 const remove = confirm(`Do you want to remove the name "${name}"?\nPress OK to remove, or Cancel to just select this name.`);
                 if (remove) {
                     // Remove name from list
-                    users = users.filter((n) => n !== name);
+                    users = users.filter((u) => (typeof u === 'string' ? u !== name : u.name !== name));
                     // If we were showing bookings for this name, clear selection
                     if (currentClientName === name) {
                         currentClientName = null;
@@ -364,7 +443,16 @@ function renderUserManager() {
                 }
             }
 
-            // Normal behaviour: select this name for booking
+            // Normal behaviour: select this name for booking (requires password)
+            const userObj = users.find((u) => (typeof u === 'string' ? u === name : u.name === name));
+            const expectedPassword = typeof userObj === 'string' ? '' : userObj?.password || '';
+            if (expectedPassword) {
+                const entered = prompt(`Enter password for ${name}:`);
+                if (entered !== expectedPassword) {
+                    alert('Incorrect password.');
+                    return;
+                }
+            }
             currentClientName = name;
             updateSelectedCount();
             updateMonthStatus();
@@ -530,21 +618,24 @@ function setupEventListeners() {
     // Add user button
     const addUserBtn = document.getElementById('addUserBtn');
     const newUserInput = document.getElementById('newUserInput');
-    if (addUserBtn && newUserInput) {
+    const newUserPasswordInput = document.getElementById('newUserPassword');
+    if (addUserBtn && newUserInput && newUserPasswordInput) {
         addUserBtn.addEventListener('click', () => {
             if (!isAdmin) {
                 alert('Enter the admin password at the bottom before adding names.');
                 return;
             }
             const name = newUserInput.value.trim();
-            if (!name) return;
-            if (users.includes(name)) {
+            const password = newUserPasswordInput.value.trim();
+            if (!name || !password) return;
+            if (users.some((u) => (typeof u === 'string' ? u === name : u.name === name))) {
                 alert('This client name already exists.');
                 return;
             }
-            users.push(name);
+            users.push({ name, password });
             saveUsers();
             newUserInput.value = '';
+            newUserPasswordInput.value = '';
             currentClientName = name;
             renderUserManager();
             updateSelectedCount();
@@ -555,6 +646,43 @@ function setupEventListeners() {
 
 // Legacy confirmBookings function no longer used (confirmation step removed)
 function confirmBookings() {}
+
+// Confirm all draft bookings for the current user in the current month
+function confirmCurrentUserDrafts() {
+    if (!currentClientName) {
+        alert('Select your name first.');
+        return;
+    }
+
+    const actor = currentClientName;
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+    let confirmedCount = 0;
+    for (const [key, pending] of Object.entries(pendingBookings)) {
+        if (!pending || pending.name !== currentClientName) continue;
+        if (!key.startsWith(monthPrefix)) continue;
+        // Move draft to confirmed bookings
+        bookings[key] = { name: currentClientName };
+        delete pendingBookings[key];
+        confirmedCount++;
+        const [dateString, chairStr] = key.split('-');
+        const chair = parseInt(chairStr, 10) || 1;
+        addLogEntry('confirm', dateString, chair, actor, currentClientName);
+    }
+
+    if (confirmedCount === 0) {
+        alert('You have no draft days to confirm this month.');
+        return;
+    }
+
+    saveBookings();
+    savePendingBookings();
+    renderCalendar();
+    updateSelectedCount();
+    updateMonthStatus();
+}
 
 // Render the calendar
 function renderCalendar() {
@@ -626,63 +754,101 @@ function createChairCell(year, month, day, chair) {
     cell.className = 'chair-cell';
     
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const booking = getBooking(dateString, chair);
-    
     const bookingKey = getBookingKey(dateString, chair);
+    const booking = getBooking(dateString, chair);
+    const pending = pendingBookings[bookingKey];
 
-    // If this day is booked for this chair, show booking name
+    // If this day is booked for this chair, show booking name (confirmed)
     if (booking) {
         cell.classList.add('booked', `chair-${chair}-bg`);
         const nameSpan = document.createElement('span');
         nameSpan.className = 'booking-name';
         nameSpan.textContent = booking.name;
         cell.appendChild(nameSpan);
+    } else if (pending) {
+        // Draft (unconfirmed) booking
+        cell.classList.add('pending');
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'booking-name';
+        nameSpan.textContent = pending.name;
+        cell.appendChild(nameSpan);
     }
     
     // Add click handler
     cell.addEventListener('click', () => {
-        handleCellClick(dateString, cell, booking, chair);
+        handleCellClick(dateString, cell, booking, pending, chair);
     });
     
     return cell;
 }
 
 // Handle cell click (for bookings)
-function handleCellClick(dateString, cell, existingBooking, chair) {
-    // A name must be selected in the gray block
-    if (!currentClientName) {
-        alert('Select a name in the gray block to add or remove bookings.');
+function handleCellClick(dateString, cell, existingBooking, pendingBooking, chair) {
+    const bookingKey = getBookingKey(dateString, chair);
+
+    // Admin can always remove confirmed or draft bookings
+    if (isAdmin) {
+        if (existingBooking || pendingBooking) {
+            if (!confirm(`Remove booking on ${getChairDisplayName(chair)} for ${existingBooking ? existingBooking.name : pendingBooking.name}?`)) {
+                return;
+            }
+            if (existingBooking) {
+                delete bookings[bookingKey];
+                saveBookings();
+                addLogEntry('admin_remove_confirmed', dateString, chair, 'Admin', existingBooking.name);
+            } else if (pendingBooking) {
+                delete pendingBookings[bookingKey];
+                savePendingBookings();
+                addLogEntry('admin_remove_draft', dateString, chair, 'Admin', pendingBooking.name);
+            }
+            renderCalendar();
+            updateSelectedCount();
+            updateMonthStatus();
+        }
         return;
     }
 
-    const actor = currentClientName; // Who is acting (for the log)
-    const bookingKey = getBookingKey(dateString, chair);
+    // Regular user flow
+    if (!currentClientName) {
+        alert('Select your name in the gray block to add or remove days.');
+        return;
+    }
 
-    // If there is already a booking on this slot
+    const actor = currentClientName;
+
+    // If there is a confirmed booking
     if (existingBooking) {
-        // Only the same name can remove or change its own days
-        if (existingBooking.name !== currentClientName) {
+        if (existingBooking.name === currentClientName) {
+            alert('These days are already confirmed. Please ask admin if you need changes.');
+        } else {
             alert(`This slot already belongs to ${existingBooking.name}.`);
-            return;
         }
+        return;
+    }
 
-        // Toggle off this user's own booking
-        if (!confirm(`Remove booking for ${existingBooking.name} on ${getChairDisplayName(chair)}?`)) {
+    // Handle draft bookings
+    if (pendingBooking) {
+        if (pendingBooking.name !== currentClientName) {
+            alert(`This slot is reserved as a draft by ${pendingBooking.name}.`);
             return;
         }
-        delete bookings[bookingKey];
-        saveBookings();
-        addLogEntry('remove', dateString, chair, actor, existingBooking.name);
+        // Toggle off own draft
+        delete pendingBookings[bookingKey];
+        savePendingBookings();
+        addLogEntry('remove_draft', dateString, chair, actor, pendingBooking.name);
         renderCalendar();
         updateSelectedCount();
         updateMonthStatus();
         return;
     }
 
-    // Empty slot: create new booking for the selected name
-    bookings[bookingKey] = { name: currentClientName };
-    saveBookings();
-    addLogEntry('add', dateString, chair, actor, currentClientName);
+    // Create new draft booking for this user
+    pendingBookings[bookingKey] = {
+        name: currentClientName,
+        createdAt: new Date().toISOString()
+    };
+    savePendingBookings();
+    addLogEntry('add_draft', dateString, chair, actor, currentClientName);
     renderCalendar();
     updateSelectedCount();
     updateMonthStatus();

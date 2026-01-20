@@ -92,9 +92,14 @@ h1 {
 }
 
 .user-chip.selected {
-    background: #667eea;
+    background: #4caf50;
     color: #fff;
-    border-color: #5568d3;
+    border-color: #388e3c;
+}
+
+.chair-cell.pending {
+    background: #e0e0e0 !important;
+    border: 2px dashed #999;
 }
 
 .calendar-header {

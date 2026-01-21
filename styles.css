@@ -268,9 +268,17 @@ h1 {
     vertical-align: middle;
 }
 
+.chair-cell.weekend-cell {
+    background: #f0f0f0;
+}
+
 .chair-cell:hover {
     background: #f8f9fa;
     border-color: #667eea;
+}
+
+.chair-cell.weekend-cell:hover {
+    background: #e8e8e8;
 }
 
 .chair-cell.booked {
@@ -296,6 +304,27 @@ h1 {
 
 .chair-cell.booked.chair-5-bg {
     background: #e1bee7;
+}
+
+/* Weekend booked cells - darker versions for better visibility */
+.chair-cell.weekend-cell.booked.chair-1-bg {
+    background: #ff9999;
+}
+
+.chair-cell.weekend-cell.booked.chair-2-bg {
+    background: #9fd689;
+}
+
+.chair-cell.weekend-cell.booked.chair-3-bg {
+    background: #8cc9ff;
+}
+
+.chair-cell.weekend-cell.booked.chair-4-bg {
+    background: #ffcc99;
+}
+
+.chair-cell.weekend-cell.booked.chair-5-bg {
+    background: #d199e0;
 }
 
 .booking-name {

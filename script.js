@@ -762,6 +762,15 @@ function createChairCell(year, month, day, chair) {
     cell.className = 'chair-cell';
     
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const date = new Date(year, month, day);
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    
+    // Mark weekend cells
+    if (isWeekend) {
+        cell.classList.add('weekend-cell');
+    }
+    
     const bookingKey = getBookingKey(dateString, chair);
     const booking = getBooking(dateString, chair);
     const pending = pendingBookings[bookingKey];

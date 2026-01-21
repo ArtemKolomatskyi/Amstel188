@@ -196,6 +196,7 @@ function loadUsers() {
                 users = [];
             }
             renderUserManager();
+            renderUserManagement();
             updateSelectedCount();
         });
     } else {
@@ -211,6 +212,7 @@ function loadUsers() {
             users = [];
         }
         renderUserManager();
+        renderUserManagement();
         updateSelectedCount();
     }
 }
@@ -461,6 +463,166 @@ function renderUserManager() {
     });
 }
 
+// Render user management section for admin (shows all users with passwords and management options)
+function renderUserManagement() {
+    const container = document.getElementById('adminUserManagement');
+    const list = document.getElementById('userManagementList');
+    if (!container || !list) return;
+
+    if (!isAdmin) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    if (users.length === 0) {
+        list.innerHTML = '<p>No users created yet. Add users using the form above.</p>';
+        return;
+    }
+
+    let html = '<div class="user-management-table">';
+    html += '<div class="user-management-header">';
+    html += '<div class="user-mgmt-col-name">Name</div>';
+    html += '<div class="user-mgmt-col-password">Password</div>';
+    html += '<div class="user-mgmt-col-actions">Actions</div>';
+    html += '</div>';
+
+    users.forEach((user, index) => {
+        html += `<div class="user-management-row" data-index="${index}">`;
+        html += `<div class="user-mgmt-col-name"><strong>${escapeHtml(user.name)}</strong></div>`;
+        html += `<div class="user-mgmt-col-password"><code>${escapeHtml(user.password || '(no password)')}</code></div>`;
+        html += '<div class="user-mgmt-col-actions">';
+        html += `<button class="user-mgmt-btn rename-btn" onclick="handleRenameUser(${index})">Rename</button>`;
+        html += `<button class="user-mgmt-btn change-password-btn" onclick="handleChangePassword(${index})">Change Password</button>`;
+        html += `<button class="user-mgmt-btn remove-btn" onclick="handleRemoveUser(${index})">Remove</button>`;
+        html += '</div>';
+        html += '</div>';
+    });
+
+    html += '</div>';
+    list.innerHTML = html;
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Handle rename user
+function handleRenameUser(index) {
+    if (!isAdmin) return;
+    if (index < 0 || index >= users.length) return;
+
+    const oldName = users[index].name;
+    const newName = prompt(`Enter new name for "${oldName}":`, oldName);
+    
+    if (!newName || newName.trim() === '') {
+        return;
+    }
+
+    const trimmedName = newName.trim();
+    
+    // Check if name already exists (except for current user)
+    if (users.some((u, i) => i !== index && u.name.toLowerCase() === trimmedName.toLowerCase())) {
+        alert('A user with this name already exists.');
+        return;
+    }
+
+    // Update all bookings with the old name to the new name
+    for (const [key, booking] of Object.entries(bookings)) {
+        if (booking && booking.name === oldName) {
+            bookings[key].name = trimmedName;
+        }
+    }
+
+    // Update pending bookings
+    for (const [key, pending] of Object.entries(pendingBookings)) {
+        if (pending && pending.name === oldName) {
+            pendingBookings[key].name = trimmedName;
+        }
+    }
+
+    // Update change log
+    changeLog.forEach(entry => {
+        if (entry.name === oldName) {
+            entry.name = trimmedName;
+        }
+        if (entry.actor === oldName) {
+            entry.actor = trimmedName;
+        }
+    });
+
+    // If this was the currently selected user, update it
+    if (currentClientName === oldName) {
+        currentClientName = trimmedName;
+    }
+
+    // Update the user name
+    users[index].name = trimmedName;
+    
+    saveUsers();
+    saveBookings();
+    savePendingBookings();
+    saveChangeLog();
+    
+    renderCalendar();
+    renderUserManager();
+    renderUserManagement();
+    updateSelectedCount();
+    
+    alert(`User "${oldName}" has been renamed to "${trimmedName}". All bookings and logs have been updated.`);
+}
+
+// Handle change password
+function handleChangePassword(index) {
+    if (!isAdmin) return;
+    if (index < 0 || index >= users.length) return;
+
+    const userName = users[index].name;
+    const newPassword = prompt(`Enter new password for "${userName}":`, users[index].password || '');
+    
+    if (newPassword === null) {
+        return; // User cancelled
+    }
+
+    users[index].password = newPassword.trim();
+    saveUsers();
+    renderUserManagement();
+    
+    alert(`Password for "${userName}" has been updated.`);
+}
+
+// Handle remove user
+function handleRemoveUser(index) {
+    if (!isAdmin) return;
+    if (index < 0 || index >= users.length) return;
+
+    const userName = users[index].name;
+    
+    if (!confirm(`Are you sure you want to remove user "${userName}"?\n\nThis will remove the user, but their bookings will remain in the calendar.`)) {
+        return;
+    }
+
+    // Remove the user
+    users.splice(index, 1);
+    
+    // If this was the currently selected user, clear selection
+    if (currentClientName === userName) {
+        currentClientName = null;
+    }
+    
+    saveUsers();
+    renderUserManager();
+    renderUserManagement();
+    updateSelectedCount();
+    renderCalendar();
+    
+    alert(`User "${userName}" has been removed.`);
+}
+
 // Update month status display
 function updateMonthStatus() {
     const statusDiv = document.getElementById('monthStatus');
@@ -503,6 +665,13 @@ function updateMonthStatus() {
     updateSelectedCount();
     renderAdminLog();
     renderUserManager();
+    renderUserManagement();
+    
+    // Show/hide user management section
+    const adminUserManagement = document.getElementById('adminUserManagement');
+    if (adminUserManagement) {
+        adminUserManagement.style.display = isAdmin ? 'block' : 'none';
+    }
 }
 
 // Update selected count display
@@ -650,6 +819,7 @@ function setupEventListeners() {
             newUserPasswordInput.value = '';
             currentClientName = name;
             renderUserManager();
+            renderUserManagement();
             updateSelectedCount();
             updateMonthStatus();
         });

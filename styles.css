@@ -401,6 +401,135 @@ h1 {
     border: 2px solid #f5c6cb;
 }
 
+/* Admin user management */
+.admin-user-management {
+    margin-top: 25px;
+    padding-top: 15px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.admin-user-management h3 {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    color: #444;
+}
+
+.user-management-list {
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    padding: 10px 12px;
+}
+
+.user-management-table {
+    width: 100%;
+}
+
+.user-management-header {
+    display: grid;
+    grid-template-columns: 2fr 2fr 3fr;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 2px solid #ddd;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.user-management-row {
+    display: grid;
+    grid-template-columns: 2fr 2fr 3fr;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e6e6e6;
+    align-items: center;
+}
+
+.user-management-row:last-child {
+    border-bottom: none;
+}
+
+.user-mgmt-col-name {
+    font-weight: 500;
+}
+
+.user-mgmt-col-password code {
+    background: #e9ecef;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: #d63384;
+}
+
+.user-mgmt-col-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.user-mgmt-btn {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.user-mgmt-btn:hover {
+    background: #f0f0f0;
+    border-color: #bbb;
+}
+
+.user-mgmt-btn.rename-btn {
+    color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.user-mgmt-btn.rename-btn:hover {
+    background: #0d6efd;
+    color: white;
+}
+
+.user-mgmt-btn.change-password-btn {
+    color: #198754;
+    border-color: #198754;
+}
+
+.user-mgmt-btn.change-password-btn:hover {
+    background: #198754;
+    color: white;
+}
+
+.user-mgmt-btn.remove-btn {
+    color: #dc3545;
+    border-color: #dc3545;
+}
+
+.user-mgmt-btn.remove-btn:hover {
+    background: #dc3545;
+    color: white;
+}
+
+@media (max-width: 768px) {
+    .user-management-header,
+    .user-management-row {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+
+    .user-mgmt-col-actions {
+        justify-content: flex-start;
+    }
+
+    .user-mgmt-btn {
+        font-size: 0.75rem;
+        padding: 5px 10px;
+    }
+}
+
 /* Admin change log */
 .admin-log-container {
     margin-top: 25px;

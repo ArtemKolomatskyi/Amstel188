@@ -714,7 +714,7 @@ function updateSelectedCount() {
     if (draftCount > 0) {
         selectedCount.textContent = `${confirmedCount} confirmed, ${draftCount} draft day${draftCount !== 1 ? 's' : ''} this month`;
     } else {
-        selectedCount.textContent = `${confirmedCount} booking${confirmedCount !== 1 ? 's' : ''} this month`;
+        selectedCount.textContent = `${confirmedCount} working day${confirmedCount !== 1 ? 's' : ''} this month`;
     }
 }
 
